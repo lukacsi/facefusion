@@ -1,16 +1,18 @@
 from time import sleep
-
+import tempfile
 import pytest
+from facefusion import state_manager
 
-from facefusion.jobs.job_helper import get_step_output_path
+from facefusion.jobs.job_helper import get_step_output_path, get_step_temp_directory_path
 from facefusion.jobs.job_manager import add_step, clear_jobs, count_step_total, create_job, delete_job, delete_jobs, find_job_ids, find_jobs, get_steps, init_jobs, insert_step, move_job_file, remix_step, remove_step, set_step_status, set_steps_status, submit_job, submit_jobs
 from .helper import get_test_jobs_directory
 
 
 @pytest.fixture(scope = 'function', autouse = True)
 def before_each() -> None:
-	clear_jobs(get_test_jobs_directory())
-	init_jobs(get_test_jobs_directory())
+        clear_jobs(get_test_jobs_directory())
+        init_jobs(get_test_jobs_directory())
+        state_manager.init_item('temp_path', tempfile.gettempdir())
 
 
 def test_create_job() -> None:
@@ -214,10 +216,10 @@ def test_remix_step() -> None:
 	assert steps[0].get('args') == args_1
 	assert steps[1].get('args') == args_2
 	assert steps[2].get('args').get('source_path') == args_2.get('source_path')
-	assert steps[2].get('args').get('target_path') == get_step_output_path('job-test-remix-step', 0, args_1.get('output_path'))
+	assert steps[2].get('args').get('target_path') == get_step_temp_directory_path('job-test-remix-step', 0, args_1.get('output_path'))
 	assert steps[2].get('args').get('output_path') == args_2.get('output_path')
 	assert steps[3].get('args').get('source_path') == args_2.get('source_path')
-	assert steps[3].get('args').get('target_path') == get_step_output_path('job-test-remix-step', 2, args_2.get('output_path'))
+	assert steps[3].get('args').get('target_path') == get_step_temp_directory_path('job-test-remix-step', 2, args_2.get('output_path'))
 	assert steps[3].get('args').get('output_path') == args_2.get('output_path')
 	assert count_step_total('job-test-remix-step') == 4
 

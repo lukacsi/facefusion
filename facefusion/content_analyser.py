@@ -139,8 +139,28 @@ def analyse_frame(vision_frame : VisionFrame) -> bool:
 
 @lru_cache(maxsize = None)
 def analyse_image(image_path : str) -> bool:
-	vision_frame = read_image(image_path)
-	return analyse_frame(vision_frame)
+        vision_frame = read_image(image_path)
+        return analyse_frame(vision_frame)
+
+
+def analyse_frames(frame_paths : List[str]) -> bool:
+        rate = 0.0
+        total = 0
+        counter = 0
+
+        with tqdm(total = len(frame_paths), desc = wording.get('analysing'), unit = 'frame', ascii = ' =', disable = state_manager.get_item('log_level') in [ 'warn', 'error' ]) as progress:
+
+                for frame_path in frame_paths:
+                        vision_frame = read_image(frame_path)
+                        total += 1
+                        if analyse_frame(vision_frame):
+                                counter += 1
+                        if counter > 0 and total > 0:
+                                rate = counter / total * 100
+                        progress.set_postfix(rate = rate)
+                        progress.update()
+
+        return bool(rate > 10.0)
 
 
 @lru_cache(maxsize = None)
