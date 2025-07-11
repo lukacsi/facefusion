@@ -126,6 +126,7 @@ def apply(job_action : JobManagerAction, created_job_id : str, selected_job_id :
 			state_manager.set_item('output_path', output_path)
 			logger.error(wording.get('job_step_not_added').format(job_id = selected_job_id), __name__)
 
+	# maybe we flag here
 	if job_action == 'job-remix-step':
 		if selected_job_id and job_manager.has_step(selected_job_id, selected_step_index) and job_manager.remix_step(selected_job_id, selected_step_index, step_args):
 			updated_step_choices = get_step_choices(selected_job_id) or [ 'none' ] #type:ignore[list-item]

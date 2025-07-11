@@ -319,7 +319,7 @@ def process_batch(args : Args) -> ErrorCode:
 				return 0
 	return 1
 
-
+# processing steps
 def process_step(job_id : str, step_index : int, step_args : Args) -> bool:
 	clear_reference_faces()
 	step_total = job_manager.count_step_total(job_id)
@@ -328,20 +328,21 @@ def process_step(job_id : str, step_index : int, step_args : Args) -> bool:
 
 	logger.info(wording.get('processing_step').format(step_current = step_index + 1, step_total = step_total), __name__)
 	if common_pre_check() and processors_pre_check():
+		# call processing
 		error_code = conditional_process()
 		return error_code == 0
 	return False
 
-
+# true processing starts
 def conditional_process() -> ErrorCode:
 	start_time = time()
 
 	for processor_module in get_processors_modules(state_manager.get_item('processors')):
 		if not processor_module.pre_process('output'):
 			return 2
-
+	# getting the referencce face
 	conditional_append_reference_faces()
-
+	# figure out input type
 	if is_image(state_manager.get_item('target_path')):
 		return process_image(start_time)
 	if is_video(state_manager.get_item('target_path')):
@@ -349,18 +350,22 @@ def conditional_process() -> ErrorCode:
 
 	return 0
 
-
+# get the reference face frame
 def conditional_append_reference_faces() -> None:
 	if 'reference' in state_manager.get_item('face_selector_mode') and not get_reference_faces():
 		source_frames = read_static_images(state_manager.get_item('source_paths'))
 		source_faces = get_many_faces(source_frames)
 		source_face = get_average_face(source_faces)
 		if is_video(state_manager.get_item('target_path')):
+			# NEED TO CHANGE THIS TO REFERENCE THE OUTPUT FRAME FROM THE PERVIOUS STEP, if its not the first step of the job
 			reference_frame = read_video_frame(state_manager.get_item('target_path'), state_manager.get_item('reference_frame_number'))
 		else:
 			reference_frame = read_image(state_manager.get_item('target_path'))
 		reference_faces = sort_and_filter_faces(get_many_faces([ reference_frame ]))
 		reference_face = get_one_face(reference_faces, state_manager.get_item('reference_face_position'))
+
+		# OR THIS DEPENDING HOW WE WANT TO DO IT (dont see why we would go this route)
+		# alternate route is changing face store behaviout (refactor pipeline?)
 		append_reference_face('origin', reference_face)
 
 		if source_face and reference_face:
@@ -419,11 +424,13 @@ def process_image(start_time : float) -> ErrorCode:
 	process_manager.end()
 	return 0
 
-
+# the real work of a step resides here
 def process_video(start_time : float) -> ErrorCode:
 	trim_frame_start, trim_frame_end = restrict_trim_frame(state_manager.get_item('target_path'), state_manager.get_item('trim_frame_start'), state_manager.get_item('trim_frame_end'))
-	if analyse_video(state_manager.get_item('target_path'), trim_frame_start, trim_frame_end):
-		return 3
+	
+	# analyze the video for nswf frames if positive frames are <10% of all frames abort step (we dont really need this, extra work to implement this for just one project)
+	# if analyse_video(state_manager.get_item('target_path'), trim_frame_start, trim_frame_end):
+	# 	return 3
 
 	logger.debug(wording.get('clearing_temp'), __name__)
 	clear_temp_directory(state_manager.get_item('target_path'))
@@ -434,6 +441,8 @@ def process_video(start_time : float) -> ErrorCode:
 	temp_video_resolution = pack_resolution(restrict_video_resolution(state_manager.get_item('target_path'), unpack_resolution(state_manager.get_item('output_video_resolution'))))
 	temp_video_fps = restrict_video_fps(state_manager.get_item('target_path'), state_manager.get_item('output_video_fps'))
 	logger.info(wording.get('extracting_frames').format(resolution = temp_video_resolution, fps = temp_video_fps), __name__)
+
+	# we dont need to extract frames if this is not the first step of the job
 	if extract_frames(state_manager.get_item('target_path'), temp_video_resolution, temp_video_fps, trim_frame_start, trim_frame_end):
 		logger.debug(wording.get('extracting_frames_succeed'), __name__)
 	else:
@@ -448,6 +457,7 @@ def process_video(start_time : float) -> ErrorCode:
 	if temp_frame_paths:
 		for processor_module in get_processors_modules(state_manager.get_item('processors')):
 			logger.info(wording.get('processing'), processor_module.__name__)
+			# run the processors on the frames (in our case: FACESWAP HAPPENS HERE)
 			processor_module.process_video(state_manager.get_item('source_paths'), temp_frame_paths)
 			processor_module.post_process()
 		if is_process_stopping():
@@ -458,6 +468,8 @@ def process_video(start_time : float) -> ErrorCode:
 		return 1
 
 	logger.info(wording.get('merging_video').format(resolution = state_manager.get_item('output_video_resolution'), fps = state_manager.get_item('output_video_fps')), __name__)
+	
+	# we dont need to merge the frames if it is not the last step of a job
 	if merge_video(state_manager.get_item('target_path'), temp_video_fps, state_manager.get_item('output_video_resolution'), state_manager.get_item('output_video_fps'), trim_frame_start, trim_frame_end):
 		logger.debug(wording.get('merging_video_succeed'), __name__)
 	else:
@@ -468,6 +480,8 @@ def process_video(start_time : float) -> ErrorCode:
 		process_manager.end()
 		return 1
 
+	# we need to figure out how to reference the source video when the last step happens(the merge) so we can restore audio here
+	# not the end of the world if we dont we can always do it on our own with a batch script when we have the whole movie
 	if state_manager.get_item('output_audio_volume') == 0:
 		logger.info(wording.get('skipping_audio'), __name__)
 		move_temp_file(state_manager.get_item('target_path'), state_manager.get_item('output_path'))
@@ -499,6 +513,7 @@ def process_video(start_time : float) -> ErrorCode:
 	logger.debug(wording.get('clearing_temp'), __name__)
 	clear_temp_directory(state_manager.get_item('target_path'))
 
+	# this wont be true if its not the first step, we need to implement other check
 	if is_video(state_manager.get_item('output_path')):
 		seconds = '{:.2f}'.format((time() - start_time))
 		logger.info(wording.get('processing_video_succeed').format(seconds = seconds), __name__)

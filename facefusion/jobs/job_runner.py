@@ -3,11 +3,13 @@ from facefusion.filesystem import are_images, are_videos, move_file, remove_file
 from facefusion.jobs import job_helper, job_manager
 from facefusion.types import JobOutputSet, JobStep, ProcessStep
 
-
+# jobs start here
 def run_job(job_id : str, process_step : ProcessStep) -> bool:
 	queued_job_ids = job_manager.find_job_ids('queued')
 
 	if job_id in queued_job_ids:
+		# run steps then finalitze steps, both need reworking
+		# clean steps is removing the temp files, need to figure out if it would remove our generated content
 		if run_steps(job_id, process_step) and finalize_steps(job_id):
 			clean_steps(job_id)
 			return job_manager.move_job_file(job_id, 'completed')
@@ -51,10 +53,11 @@ def retry_jobs(process_step : ProcessStep, halt_on_error : bool) -> bool:
 		return not has_error
 	return False
 
-
+# run a specific step
 def run_step(job_id : str, step_index : int, step : JobStep, process_step : ProcessStep) -> bool:
 	step_args = step.get('args')
 
+	# call core.process_step and start the step procession
 	if job_manager.set_step_status(job_id, step_index, 'started') and process_step(job_id, step_index, step_args):
 		output_path = step_args.get('output_path')
 		step_output_path = job_helper.get_step_output_path(job_id, step_index, output_path)
@@ -63,7 +66,7 @@ def run_step(job_id : str, step_index : int, step : JobStep, process_step : Proc
 	job_manager.set_step_status(job_id, step_index, 'failed')
 	return False
 
-
+# run steps here
 def run_steps(job_id : str, process_step : ProcessStep) -> bool:
 	steps = job_manager.get_steps(job_id)
 
@@ -74,10 +77,10 @@ def run_steps(job_id : str, process_step : ProcessStep) -> bool:
 		return True
 	return False
 
-
+# moves the created files around, is exepting multiple videos, we need to change this behaviour
 def finalize_steps(job_id : str) -> bool:
 	output_set = collect_output_set(job_id)
-
+	# maybe need to add an are_video_frames option
 	for output_path, temp_output_paths in output_set.items():
 		if are_videos(temp_output_paths):
 			if not concat_video(output_path, temp_output_paths):
