@@ -1,7 +1,12 @@
 # Intro
-We are trying to revamp the proessing of steps to streamline the process of jobs.
+We are trying to revamp the processing of steps to streamline the process of jobs.
 
 Currently a job step always splits the source video into frames, runs the step's processors on it then merges the frames. The problem is when we run a job with multiple remix steps, the video gets processed unessesary amount of times this costs a lot of processing power and time and also causes the resulting video to be compressed multiple times.
+
+### job step vs job remix step
+The difference between the two is that if you run multiple faceswaps (using this processor for eplanation), and you them as multiple steps, you get separate videos of each face. If you swap a face using step, and then the rest using remix step, the steps get piped into eachother.
+
+step output -> remix step 1 input -processing- remix 1 step output -> remix step 2 input ....etc
 
 # Process
 * flag jobs that only contain a first normal step, and one or more subsequent remix steps.
